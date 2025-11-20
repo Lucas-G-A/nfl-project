@@ -39,7 +39,7 @@ def team_offense_summary(pbp: pd.DataFrame) -> pd.DataFrame:
 
 
 def main():
-    seasons = [2023]  # you can change this to [2022, 2023], etc.
+    seasons = [2025]  # you can change this to [2022, 2023], etc.
     print(f"Loading play-by-play data for seasons: {seasons} ...")
     pbp = load_pbp(seasons)
 
