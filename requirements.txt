@@ -1,2 +1,5 @@
 pandas==1.5.3
 nfl_data_py==0.3.3
+matplotlib
+requests
+beautifulsoup4
