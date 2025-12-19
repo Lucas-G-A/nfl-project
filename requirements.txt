@@ -5,3 +5,4 @@ requests>=2.31
 beautifulsoup4>=4.12
 nfl-data-py
 streamlit>=1.30
+pyarrow==18.1.0
