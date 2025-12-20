@@ -106,17 +106,110 @@ def mostrar_metricas(equipo_local: str, equipo_visita: str, p_local: float):
 pagina = st.sidebar.radio(
     "Navegación",
     [
-        "Análisis (6 gráficas)",
+        "Inicio",
+        "Análisis",
         "Partidos de esta semana",
         "Partido hipotético"
     ]
 )
+if pagina == "Inicio":
+    st.header("Descripción del proyecto")
+
+    st.markdown("""
+    **Autor:** Lucas García  
+    **Repositorio:** https://github.com/TU_USUARIO/TU_REPO  
+
+    Este proyecto analiza el desempeño de equipos de la **NFL** y construye
+    un **modelo de predicción de partidos** utilizando métricas estadísticas
+    y un sistema de ratings **Elo**, sin utilizar machine learning.
+
+    El objetivo es:
+    - Identificar qué factores explican el éxito de un equipo
+    - Visualizar estos factores de forma clara
+    - Predecir partidos reales y escenarios hipotéticos
+    """)
+
+    st.header("🧠 Metodología")
+
+    st.markdown("""
+    El proyecto se divide en **dos partes principales**:
+
+    ### 1. Análisis de datos
+    A partir de datos oficiales de la NFL se construyen métricas como:
+    - Diferencial de entregas de balón (turnover margin)
+    - Eficiencia ofensiva (yardas por jugada)
+    - Eficiencia defensiva (yardas permitidas)
+    - Consistencia en anotación
+    - Balance ofensivo–defensivo
+
+    Estas métricas se visualizan en **6 gráficas** que resumen los hallazgos.
+
+    ### 2. Predicción de partidos
+    Se utiliza un sistema **Elo** ajustado por:
+    - Resultados históricos
+    - Ventaja de local
+    - (Previamente) métricas de eficiencia calculadas
+
+    El modelo genera:
+    - Probabilidades de victoria para los partidos de la semana
+    - Predicciones para enfrentamientos hipotéticos
+    """)
+
+    st.header("🛠️ Tecnologías utilizadas")
+
+    st.markdown("""
+    - **Python**
+    - **pandas / numpy** – manipulación de datos
+    - **matplotlib** – visualización
+    - **nfl_data_py** – datos oficiales de la NFL (schedules y play-by-play)
+    - **Streamlit** – interfaz interactiva
+    - **Docker** – reproducibilidad del entorno
+    """)
+
+    st.header("📦 Estructura del proyecto")
+
+    st.markdown("""
+    - `notebooks/`  
+      Análisis exploratorio, generación de métricas y predicciones.
+
+    - `figures/`  
+      Gráficas finales exportadas como imágenes.
+
+    - `data/`  
+      Archivos CSV con predicciones semanales.
+
+    - `elo_ratings.json`  
+      Ratings Elo finales para predicciones hipotéticas.
+
+    - `app.py`  
+      Aplicación Streamlit (interfaz).
+
+    - `requirements.txt`  
+      Dependencias del proyecto.
+
+    - `Dockerfile`  
+      Definición del entorno reproducible.
+    """)
+
+    st.header("🚀 Cómo funciona la aplicación")
+
+    st.markdown("""
+    1. Las predicciones y gráficas se generan **offline** en notebooks.
+    2. Los resultados se guardan como archivos (`CSV`, `PNG`, `JSON`).
+    3. La aplicación Streamlit **consume estos archivos**, sin recalcular datos.
+    4. Esto garantiza velocidad, estabilidad y reproducibilidad.
+    """)
+
+    st.info(
+        "Este enfoque replica cómo funcionan sistemas reales: "
+        "cálculo pesado separado de la capa de presentación."
+    )
 
 
 # -----------------------------
 # Página 1: Análisis
 # -----------------------------
-if pagina == "Análisis (6 gráficas)":
+if pagina == "Análisis":
     st.header("Resultados del análisis")
 
     if not FIG_DIR.exists():
