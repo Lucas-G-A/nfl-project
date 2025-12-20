@@ -25,6 +25,8 @@ DATA_DIR = ROOT / "data"
 PRED_CSV_DEFAULT = ROOT / "notebooks" / "predictions_this_weekend.csv"
 PRED_CSV_ALT = DATA_DIR / "predictions_this_weekend.csv"
 ELO_JSON = ROOT / "elo_ratings.json"
+LATEST_JSON = ROOT / "latest_team_stats.json"
+
 
 
 # -----------------------------
@@ -77,6 +79,23 @@ def cargar_elo() -> dict:
         st.stop()
     return json.loads(ELO_JSON.read_text())
 
+def cargar_latest() -> pd.DataFrame:
+    if not LATEST_JSON.exists():
+        st.error(
+            "No se encontró `latest_team_stats.json` en la raíz.\n\n"
+            "Genéralo desde `predicciones.ipynb` (export de latest rolling stats)."
+        )
+        st.stop()
+    data = json.loads(LATEST_JSON.read_text())
+    df = pd.DataFrame(data)
+    required = {"team","off_ypp","def_ypp","to_margin"}
+    missing = required - set(df.columns)
+    if missing:
+        st.error(f"`latest_team_stats.json` no tiene columnas: {sorted(missing)}")
+        st.stop()
+    return df.set_index("team")
+
+
 
 def probabilidad_elo(elo_local: float, elo_visita: float) -> float:
     return 1 / (1 + 10 ** ((elo_visita - elo_local) / 400))
@@ -109,7 +128,8 @@ pagina = st.sidebar.radio(
         "Inicio",
         "Análisis",
         "Partidos de esta semana",
-        "Partido hipotético"
+        "Partido hipotético",
+        "Contrafactual"
     ]
 )
 if pagina == "Inicio":
@@ -298,3 +318,79 @@ elif pagina == "Partido hipotético":
             "Las predicciones semanales incorporan además métricas "
             "de eficiencia calculadas previamente."
         )
+
+elif pagina == "Contrafactual":
+    st.header("🧪 Contrafactual: impacto de pequeños cambios")
+
+    st.markdown("""
+    Esta sección responde preguntas tipo:
+    - *¿Qué pasa si el equipo local comete 1 turnover menos?*
+    - *¿Qué pasa si su ofensiva mejora 0.3 yardas por jugada?*
+
+    **No es machine learning**: es un análisis explicable que ajusta la probabilidad base del partido.
+    """)
+
+    # Cargamos insumos
+    df_pred = cargar_predicciones()
+    elo = cargar_elo()
+    latest_df = cargar_latest()
+
+    # Selector de partido (de esta semana)
+    seleccion = st.selectbox("Selecciona un partido de esta semana", df_pred["etiqueta"])
+    fila = df_pred[df_pred["etiqueta"] == seleccion].iloc[0]
+
+    home = fila["home_team"]
+    away = fila["away_team"]
+
+    # Prob base desde tu CSV (ya incluye tu modelo semanal)
+    p_base_home = float(fila["home_win_prob"])
+
+    st.subheader(f"{away} @ {home}")
+    st.write(f"**Probabilidad base (LOCAL gana):** {p_base_home:.1%}")
+
+    # Sliders contrafactuales
+    st.markdown("### Ajustes hipotéticos")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        delta_to = st.slider("Turnover margin del LOCAL (cambio)", -3, 3, 0, 1)
+    with col2:
+        delta_off = st.slider("Off YPP del LOCAL (cambio)", -1.0, 1.0, 0.0, 0.1)
+    with col3:
+        delta_def = st.slider("Def YPP del LOCAL (cambio)", -1.0, 1.0, 0.0, 0.1)
+
+    st.caption("Nota: Def YPP menor es mejor; por eso un cambio negativo suele ayudar al equipo local.")
+
+    # --- Modelo explicable de ajuste (sin ML) ---
+    # Convertimos cambios en “puntos Elo” con pesos razonables y luego a prob.
+    HFA = 55
+
+    # Pesos heurísticos (defendibles). Puedes afinarlos.
+    W_TO  = 45    # 1 turnover ~ 45 Elo pts (aprox 8-12 pp según matchup)
+    W_OFF = 120   # +1.0 ypp es enorme; por eso normalmente usarás +0.1/+0.3
+    W_DEF = 120
+
+    # Tomamos Elo actual
+    elo_home = float(elo.get(home, 1500.0))
+    elo_away = float(elo.get(away, 1500.0))
+
+    # Ajuste Elo por contrafactual
+    # Defensa: si delta_def es negativo, mejora al local => suma Elo (por eso restamos)
+    adj_elo = (W_TO * delta_to) + (W_OFF * delta_off) + (W_DEF * (-delta_def))
+
+    # Probabilidad contrafactual usando Elo (rápido y estable)
+    p_cf_home = probabilidad_elo((elo_home + HFA + adj_elo), elo_away)
+
+    st.markdown("### Resultado")
+    colA, colB = st.columns(2)
+    colA.metric("Probabilidad base (LOCAL)", f"{p_base_home:.1%}")
+    colB.metric("Probabilidad contrafactual (LOCAL)", f"{p_cf_home:.1%}")
+
+    delta_pp = (p_cf_home - p_base_home) * 100
+    st.write(f"**Cambio estimado:** {delta_pp:+.1f} puntos porcentuales")
+
+    st.markdown("""
+    **Interpretación:**  
+    Este cálculo muestra sensibilidad del partido a cambios pequeños y plausibles.  
+    No afirma causalidad perfecta, pero ayuda a entender *qué tanto “pesa”* cada factor.
+    """)
