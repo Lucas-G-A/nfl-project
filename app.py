@@ -130,7 +130,8 @@ pagina = st.sidebar.radio(
         "Partidos de esta semana",
         "Partido hipotético",
         "Contrafactual",
-        "Análisis de errores"
+        "Análisis de errores",
+        "Historia Elo (por equipo)"
     ]
 )
 if pagina == "Inicio":
@@ -472,4 +473,104 @@ elif pagina == "Análisis de errores":
     st.info(
         "Interpretación típica: partidos con alta incertidumbre real (lesiones, turnovers raros, "
         "juegos divisionales, o finales cerrados) pueden romper predicciones basadas en ratings/eficiencia."
+    )
+
+elif pagina == "Historia Elo (por equipo)":
+    st.header("Historia Elo por equipo")
+
+    path = ROOT / "data" / "elo_history.csv"
+    if not path.exists():
+        st.error(
+            "No se encontró `data/elo_history.csv`.\n\n"
+            "Genéralo desde `predicciones.ipynb` (train_elo_with_history + export) y vuelve a hacer push."
+        )
+        st.stop()
+
+    hist = pd.read_csv(path)
+
+    # Validación mínima
+    required = {"week_num", "team", "elo_post", "opp", "team_win"}
+    missing = required - set(hist.columns)
+    if missing:
+        st.error(f"Faltan columnas en elo_history.csv: {sorted(missing)}")
+        st.stop()
+
+    teams = sorted(hist["team"].unique().tolist())
+    team = st.selectbox("Selecciona un equipo", teams)
+
+    team_hist = hist[hist["team"] == team].copy()
+    team_hist = team_hist.sort_values(["week_num", "game_id"])
+
+    # Gráfica
+    import matplotlib.pyplot as plt
+
+    st.subheader(f"Evolución del Elo – {team}")
+
+    chart_df = (
+        team_hist
+        .groupby("week_num", as_index=False)
+        .last()[["week_num", "elo_post"]]
+        .rename(columns={"week_num": "Semana", "elo_post": "Elo"})
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+
+    ax.plot(
+        chart_df["Semana"],
+        chart_df["Elo"],
+        marker="o",
+        linewidth=2
+    )
+
+    # Rango fijo para que se aprecien los cambios
+    ax.set_ylim(1300, 1600)
+
+    ax.set_xlabel("Semana")
+    ax.set_ylabel("Rating Elo")
+    ax.set_title(f"Evolución del Elo por semana – {team}")
+
+    ax.grid(alpha=0.3)
+
+    st.pyplot(fig)
+
+
+    # Resumen
+    first_elo = float(chart_df["Elo"].iloc[0])
+    last_elo = float(chart_df["Elo"].iloc[-1])
+    delta = last_elo - first_elo
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Elo inicial", f"{first_elo:.0f}")
+    col2.metric("Elo actual", f"{last_elo:.0f}")
+    col3.metric("Cambio total", f"{delta:+.0f}")
+
+    st.divider()
+
+    # Tabla de partidos con cambios
+    st.subheader("Partidos y cambios de Elo")
+
+    show = team_hist.copy()
+    show["Partido"] = show.apply(
+        lambda r: f"{r['team']} vs {r['opp']}" if int(r.get("is_home", 1)) == 1 else f"{r['team']} @ {r['opp']}",
+        axis=1
+    )
+    show["Resultado"] = show.apply(
+        lambda r: f"{int(r['team_score'])}-{int(r['opp_score'])}",
+        axis=1
+    )
+    show["Ganó"] = show["team_win"].map({1: "Sí", 0: "No"})
+    if "elo_change" in show.columns:
+        show["Δ Elo"] = show["elo_change"].round(1)
+    else:
+        show["Δ Elo"] = ""
+
+    show = show[["week_num", "Partido", "Resultado", "Ganó", "Δ Elo", "elo_post"]].rename(
+        columns={"week_num": "Semana", "elo_post": "Elo post"}
+    )
+
+    st.dataframe(show.sort_values("Semana"), use_container_width=True)
+
+    st.caption(
+        "Nota: Elo sube más cuando ganas como underdog y/o por mayor margen. "
+        "Baja más cuando pierdes siendo favorito."
     )
