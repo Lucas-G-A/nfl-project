@@ -523,7 +523,10 @@ elif pagina == "Historia Elo (por equipo)":
     )
 
     # Rango fijo para que se aprecien los cambios
-    ax.set_ylim(1300, 1600)
+    elo_min = chart_df["Elo"].min() - 40
+    elo_max = chart_df["Elo"].max() + 40
+    ax.set_ylim(elo_min, elo_max)
+
 
     ax.set_xlabel("Semana")
     ax.set_ylabel("Rating Elo")
