@@ -129,15 +129,16 @@ pagina = st.sidebar.radio(
         "Análisis",
         "Partidos de esta semana",
         "Partido hipotético",
-        "Contrafactual"
+        "Contrafactual",
+        "Análisis de errores"
     ]
 )
 if pagina == "Inicio":
     st.header("Descripción del proyecto")
 
     st.markdown("""
-    **Autor:** Lucas García  
-    **Repositorio:** https://github.com/TU_USUARIO/TU_REPO  
+    **Autor:** Lucas García y Alonso Zamanillo
+    **Repositorio:** https://github.com/Lucas-G-A/nfl-project 
 
     Este proyecto analiza el desempeño de equipos de la **NFL** y construye
     un **modelo de predicción de partidos** utilizando métricas estadísticas
@@ -320,7 +321,7 @@ elif pagina == "Partido hipotético":
         )
 
 elif pagina == "Contrafactual":
-    st.header("🧪 Contrafactual: impacto de pequeños cambios")
+    st.header("Contrafactual: impacto de pequeños cambios")
 
     st.markdown("""
     Esta sección responde preguntas tipo:
@@ -394,3 +395,81 @@ elif pagina == "Contrafactual":
     Este cálculo muestra sensibilidad del partido a cambios pequeños y plausibles.  
     No afirma causalidad perfecta, pero ayuda a entender *qué tanto “pesa”* cada factor.
     """)
+
+elif pagina == "Análisis de errores":
+    st.header("Análisis de errores: ¿cuándo falla el modelo?")
+
+    path = ROOT / "data" / "backtest_recent_errors.csv"
+    if not path.exists():
+        st.error(
+            "No se encontró `data/backtest_recent_errors.csv`.\n\n"
+            "Genéralo desde `predicciones.ipynb` (export del backtest) y vuelve a hacer push."
+        )
+        st.stop()
+
+    df = pd.read_csv(path)
+
+    st.markdown("""
+    Esta sección muestra los partidos donde el modelo estuvo más equivocado.
+    Es útil para entender **limitaciones**, **varianza** y **contextos difíciles** (por ejemplo, juegos cerrados o sorpresas).
+    """)
+
+    # Métricas globales
+    df["pred_home_win"] = df["pred_home_win_prob"] >= 0.5
+    accuracy = (df["pred_home_win"].astype(int) == df["actual_home_win"]).mean()
+    brier = ((df["pred_home_win_prob"] - df["actual_home_win"]) ** 2).mean()
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Accuracy (rango evaluado)", f"{accuracy:.1%}")
+    col2.metric("Brier score", f"{brier:.3f}")
+    col3.metric("Partidos evaluados", str(len(df)))
+
+    st.divider()
+
+    # Filtro por semana
+    weeks = sorted(df["week_num"].unique())
+    wmin, wmax = st.select_slider(
+        "Filtrar por semanas",
+        options=weeks,
+        value=(weeks[0], weeks[-1])
+    )
+
+    view = df[(df["week_num"] >= wmin) & (df["week_num"] <= wmax)].copy()
+    view = view.sort_values("abs_error", ascending=False)
+
+    # Tabla de peores errores
+    st.subheader("Top errores (más grandes primero)")
+    show_n = st.slider("Cuántos mostrar", 5, 25, 10)
+
+    table = view.head(show_n).copy()
+
+    # Formato amigable
+    table["matchup"] = table["away_team"] + " @ " + table["home_team"]
+    table["pred_local"] = (table["pred_home_win_prob"] * 100).round(1).astype(str) + "%"
+    table["resultado"] = table["away_score"].astype(int).astype(str) + "–" + table["home_score"].astype(int).astype(str)
+    table["ganó_local"] = table["actual_home_win"].map({1: "Sí", 0: "No"})
+    table["error"] = (table["abs_error"] * 100).round(1).astype(str) + " pp"
+
+    st.dataframe(
+        table[["week_num", "matchup", "pred_local", "ganó_local", "resultado", "error"]],
+        use_container_width=True
+    )
+
+    st.divider()
+
+    # Detalle de un partido
+    st.subheader("Detalle de un partido")
+    choice = st.selectbox("Selecciona un partido", table["matchup"].tolist())
+    r = table[table["matchup"] == choice].iloc[0]
+
+    st.write(f"**Semana:** {int(r['week_num'])}")
+    st.write(f"**Partido:** {r['matchup']}")
+    st.write(f"**Probabilidad predicha (LOCAL):** {r['pred_local']}")
+    st.write(f"**Resultado final (VISITA–LOCAL):** {r['resultado']}")
+    st.write(f"**¿Ganó el local?:** {r['ganó_local']}")
+    st.write(f"**Error absoluto:** {r['error']}")
+
+    st.info(
+        "Interpretación típica: partidos con alta incertidumbre real (lesiones, turnovers raros, "
+        "juegos divisionales, o finales cerrados) pueden romper predicciones basadas en ratings/eficiencia."
+    )
